@@ -21,6 +21,8 @@ metadata {
     capability "Actuator"
     capability "Momentary"
     capability "Tone"
+    capability "Notification"
+    capability "Speech Synthesis"
   }
 
   preferences {
@@ -113,4 +115,35 @@ def triggerLevel() {
 
 def currentBinaryValue() {
   invertTrigger ? 1 : 0
+}
+
+def speak(message) {
+  handle(message)
+}
+
+def deviceNotification(message) {
+  handle(message)
+}
+
+def handle(message) {
+  def values = message.split()
+  def t = beepRepeat ?: 3
+  def m = beepDuration ?: 250
+  def p = beepPause ?: 150
+
+  switch (values.size()) {
+    case 3:
+      p = values[2].toInteger()
+    case 2:
+      m = values[1].toInteger()
+    case 1:
+      t = values[0].toInteger()
+      break
+  }
+
+  parent.deviceUpdateDeviceState(device.deviceNetworkId, triggerLevel(), [
+          momentary : m,
+          pause     : p,
+          times     : t
+  ])
 }
