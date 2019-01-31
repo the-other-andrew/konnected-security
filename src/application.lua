@@ -1,3 +1,4 @@
+require("wipe")
 local sensors = require("sensors")
 local dht_sensors = require("dht_sensors")
 local ds18b20_sensors = require("ds18b20_sensors")
@@ -110,11 +111,13 @@ sendTimer:alarm(200, tmr.ALARM_AUTO, function(t)
       table.concat({ "Authorization: Bearer ", settings.token, "\r\nAccept: application/json\r\n" }),
       function(code, response)
         timeout:stop()
-        local pin, state, json_response
+        local pin, state, json_response, status
         if response and code >= 200 and code < 300 then
-          json_response = sjson.decode(response)
-          pin = tonumber(json_response.pin)
-          state = tonumber(json_response.state)
+          status, json_response = pcall(function() return sjson.decode(response) end)
+          if status then
+            pin = tonumber(json_response.pin)
+            state = tonumber(json_response.state)
+          end
         end
         printHttpResponse(code, {pin = pin, state = state})
 
@@ -150,9 +153,14 @@ sendTimer:alarm(200, tmr.ALARM_AUTO, function(t)
         else
           -- retry up to 10 times then reboot as a failsafe
           local retry = sensor.retry or 0
-          if retry == 10 then node.restart() end
-          sensor.retry = retry + 1
-          sensorPut[1] = sensor
+          if retry == 10 then
+            print("Heap:", node.heap(), "Retried 10 times and failed. Rebooting in 30 seconds.")
+            for k,v in pairs(sensorPut) do sensorPut[k]=nil end -- remove all pending sensor updates
+            tmr.create():alarm(30000, tmr.ALARM_SINGLE, function() node.restart() end) -- reboot in 30 sec
+          else
+            sensor.retry = retry + 1
+            sensorPut[1] = sensor
+          end
         end
 
         blinktimer:start()
